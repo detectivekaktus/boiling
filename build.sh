@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 CC=gcc
-CFLAGS=("-Wall -Werror -std=c99 -pedantic")
+CFLAGS=("-Wall -Wextra -Werror -std=c99 -pedantic -ggdb3")
 
 SOURCES=("src/main.c")
 
@@ -17,15 +17,22 @@ build() {
   $CC $CFLAGS $OBJECTS -o $TARGET
 }
 
+debug() {
+  build
+}
+
 case $1 in
   build)
     build
     ;;
   debug)
-    CFLAGS+=("-ggdb")
-    build
+    debug
     ;;
   *)
-    build ...
+    if [ "$1" = "" ]; then
+      debug
+    else
+      echo "Unknown command ${1}"
+    fi
     ;;
 esac
