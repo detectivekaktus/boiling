@@ -1,13 +1,17 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
 #include <sys/stat.h>
 
-#define ERROR(msg) fprintf(stderr, "error: %s\n", msg)
+#define ERROR(msg) fprintf(stderr, "error: %s", msg)
+#define ERRORF(msg, ...) fprintf(stderr, "error: "); fprintf(stderr, msg, ##__VA_ARGS__)
 
-void help(char *name)
+#define ISSTREQ(str1, str2) strcmp(str1, str2) == 0
+
+void help(const char *name)
 {
   printf("usage: %s <command> [<args>]\n\n", name);
   printf("The most common Boiling commands used:\n\n");
@@ -21,55 +25,100 @@ void help(char *name)
   printf("  --where  | -w:   prints the config file path\n");
 }
 
-int verify_config()
+char *find_config()
 {
+  char *home = getenv("HOME");
+  if (home == NULL)
+    return "";
+  char *path = calloc(512, 1);
+  sprintf(path, "%s/.config/boiling/boiling.conf", home);
+  struct stat buf;
+  if (stat(path, &buf) != 0) {
+    free(path);
+    return "";
+  }
+  return path;
+}
+
+int handle_where_config()
+{
+  char *path = find_config();
+  if (path[0] == '\0') {
+    printf("No config found. Be sure to have set $HOME value. If $HOME is set up correctly, check/create $HOME/.config/boiling directory.\n");
+    return 1;
+  }
+  printf("Config path: %s\n", path);
+  free(path);
   return 0;
 }
 
-int main(int argc, char **argv)
+int handle_verify_config()
 {
-  if (argc < 2 || argc == 2) {
-    ERROR("Not enough arguments provided.");
-    help(argv[0]);
+  char *path = find_config();
+  if (path[0] == '\0') {
+    printf("No config found. Be sure to have set $HOME value. If $HOME is set up correctly, check/create $HOME/.config/boiling directory.\n");
     return 1;
   }
+  printf("Config contains no errors.\n");
+  free(path);
+  return 0;
+}
 
-  char *command = argv[1];
-  if (strcmp(command, "new") == 0) assert(0 && "Not implemented");
+int handle_config_command(int argc, char **argv)
+{
+  bool verified = false;
+  bool found = false;
 
-  if (command[0] == '-') {
-    ERROR("The first argument must be a command.");
-    help(argv[0]);
-    return 1;
-  }
-
-  int i = 2;
-  while (i < argc) {
+  for (int i = 2; i < argc; i++) {
     char *arg = argv[i];
     if (arg[0] != '-') {
-      ERROR("Unknown flag specified.");
+      ERRORF("Unknown flag `%s`.\n", arg);
       return 1;
     }
     // Skip dashes
     arg += arg[1] == '-' ? 2 : 1;
 
-    if (strcmp(arg, "verify") == 0 || strcmp(arg, "v") == 0) {
-      return verify_config();
-    }
-    else if (strcmp(arg, "where") == 0 || strcmp(arg, "w") == 0) {
-      char *home = getenv("HOME");
-      if (home == NULL) {
-        ERROR("$HOME environment variabile is not found.");
+    if (ISSTREQ(arg, "verify") || ISSTREQ(arg, "v")) {
+      if (verified) continue;
+      if (handle_verify_config() != 0)
         return 1;
-      }
-      char path[512];
-      sprintf(path, "%s/.config/boiling/boiling.conf", home);
-      struct stat buf;
-      if (stat(path, &buf) == 0) printf("%s\n", path);
-      else printf("No config found.\n");
-      return 0;
+      verified = true;
     }
-    i++;
+    else if (ISSTREQ(arg, "where") || ISSTREQ(arg, "w")) {
+      if (found) continue;
+      if (handle_where_config() != 0)
+        return 1;
+      found = true;
+    }
+    else {
+      ERRORF("Unknown flag `%s`.\n", arg);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int main(int argc, char **argv)
+{
+  if (argc < 3) {
+    ERROR("Not enough arguments provided. Expected at least 3.\n");
+    help(argv[0]);
+    return 1;
+  }
+
+  char *command = argv[1];
+  if (command[0] == '-') {
+    ERROR("The first argument must be a command.\n");
+    help(argv[0]);
+    return 1;
+  }
+  if (ISSTREQ(command, "new"))
+    assert(0 && "Not implemented");
+  if (ISSTREQ(command, "config"))
+    return handle_config_command(argc, argv);
+  else {
+    ERRORF("Unknown command `%s`.\n", command);
+    return 1;
   }
   return 0;
 }
