@@ -2,7 +2,7 @@
 CC=gcc
 CFLAGS=("-Wall -Wextra -Werror -std=c99 -pedantic -ggdb3")
 
-SOURCES=("src/main.c")
+SOURCES=("main.c")
 
 OBJECTS=("bin/main.o")
 
