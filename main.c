@@ -13,23 +13,6 @@
 
 #define MAX_CONFIG_PATH 512
 
-typedef enum {
-  CONFIG_KEY,
-  CONFIG_VALUE,
-  CONFIG_SECTION,
-} ConfigEntryType;
-
-typedef struct {
-  ConfigEntryType type;
-  char *value;
-} ConfigEntry;
-
-typedef struct {
-  ConfigEntry *items;
-  size_t size;
-  size_t capacity;
-} ConfigEntries;
-
 void help(const char *name)
 {
   printf("usage: %s <command> [<args>]\n\n", name);
@@ -96,12 +79,29 @@ char *load_config()
   return config;
 }
 
-#define YIELD_ENTRY(tipe, val) (ConfigEntry) { .type = tipe, .value = val }
+typedef enum {
+  CONFIG_KEY,
+  CONFIG_VALUE,
+  CONFIG_SECTION,
+} ConfigTokenType;
+
+typedef struct {
+  ConfigTokenType type;
+  char *value;
+} ConfigToken;
+
+typedef struct {
+  ConfigToken *items;
+  size_t size;
+  size_t capacity;
+} ConfigTokens;
+
+#define YIELD_TOKEN(tipe, val) (ConfigToken) { .type = tipe, .value = val }
 #define MAX_SECTION_NAME_LEN 64
 #define MAX_KEY_NAME_LEN 256
 #define MAX_VALUE_LEN 256
 
-ConfigEntries *lex_config()
+ConfigTokens *lex_config()
 {
   char *config = load_config();
   if (config == NULL) {
@@ -109,12 +109,12 @@ ConfigEntries *lex_config()
     exit(1);
   }
 
-  ConfigEntries *entries = malloc(sizeof(ConfigEntries));
-  entries->items = malloc(sizeof(ConfigEntry) * 32);
-  entries->size = 0;
-  entries->capacity = 32;
+  ConfigTokens *tokens = malloc(sizeof(ConfigTokens));
+  tokens->items = malloc(sizeof(ConfigToken) * 32);
+  tokens->size = 0;
+  tokens->capacity = 32;
 
-  ConfigEntryType global_type = CONFIG_SECTION;
+  ConfigTokenType global_type = CONFIG_SECTION;
   int i = 0;
   while (config[i] != '\0') {
     switch (config[i]) {
@@ -144,11 +144,11 @@ ConfigEntries *lex_config()
         char *value = malloc(MAX_SECTION_NAME_LEN);
         strncpy(value, config + start, i - start);
         value[i - start] = '\0';
-        if (entries->size >= entries->capacity) {
-          entries->capacity *= 2;
-          entries->items = realloc(entries->items, entries->capacity);
+        if (tokens->size >= tokens->capacity) {
+          tokens->capacity *= 2;
+          tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
         }
-        entries->items[entries->size++] = YIELD_ENTRY(CONFIG_SECTION, value);
+        tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_SECTION, value);
         global_type = CONFIG_SECTION;
         i++;
       } break;
@@ -179,11 +179,11 @@ ConfigEntries *lex_config()
           char *value = malloc(MAX_KEY_NAME_LEN);
           strncpy(value, config + start, i - start);
           value[i - start] = '\0';
-          if (entries->size >= entries->capacity) {
-            entries->capacity *= 2;
-            entries->items = realloc(entries->items, entries->capacity);
+          if (tokens->size >= tokens->capacity) {
+            tokens->capacity *= 2;
+            tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
           }
-          entries->items[entries->size++] = YIELD_ENTRY(CONFIG_KEY, value);
+          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_KEY, value);
           global_type = CONFIG_KEY;
           i++;
         }
@@ -199,11 +199,11 @@ ConfigEntries *lex_config()
           char *value = malloc(MAX_VALUE_LEN);
           strncpy(value, config + start, i - start);
           value[i - start] = '\0';
-          if (entries->size >= entries->capacity) {
-            entries->capacity *= 2;
-            entries->items = realloc(entries->items, entries->capacity);
+          if (tokens->size >= tokens->capacity) {
+            tokens->capacity *= 2;
+            tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
           }
-          entries->items[entries->size++] = YIELD_ENTRY(CONFIG_VALUE, value);
+          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_VALUE, value);
           global_type = CONFIG_VALUE;
           i++;
         }
@@ -212,20 +212,78 @@ ConfigEntries *lex_config()
   }
 
   free(config);
-  return entries;
+  return tokens;
 }
 
-ConfigEntries *parse_config(ConfigEntries *entries)
+typedef enum {
+  GLOBAL,
+  LANGUAGE
+} ConfigEntrySection;
+
+typedef struct {
+  ConfigEntrySection section;
+  char *key;
+  char *value;
+  void *next;
+} ConfigEntry;
+
+typedef struct {
+  ConfigEntry **buckets;
+  size_t capacity;
+} Config;
+
+#define CONFIG_INIT_CAPACITY 256
+
+Config *create_conf()
 {
-  for (size_t i = 0; i < entries->size; i++) {
-    printf("%d, %s\n", entries->items[i].type, entries->items[i].value);
+  Config *conf = malloc(sizeof(Config));
+  conf->capacity = CONFIG_INIT_CAPACITY;
+  conf->buckets = calloc(conf->capacity, sizeof(ConfigEntry *));
+  return conf;
+}
+
+ConfigEntry *create_config_entry(ConfigEntrySection section, char *key, char *value, void *next)
+{
+  ConfigEntry *entry = malloc(sizeof(ConfigEntry));
+  entry->section = section;
+  entry->key = key;
+  entry->value = value;
+  entry->next = next;
+  return entry;
+}
+
+int add_conf_entry(Config *conf, ConfigEntrySection section, char *key, char *value)
+{
+  long long int hash = ((long long int) key * 2) % conf->capacity;
+  if (conf->buckets[hash] == NULL)
+    conf->buckets[hash] = create_config_entry(section, key, value, NULL);
+  else {
+    ConfigEntry *entry = conf->buckets[hash];
+    while (entry->next != NULL) {
+      entry = entry->next;
+    }
+    entry->next = create_config_entry(section, key, value, NULL);
+  }
+  return 0;
+}
+
+ConfigEntry *get_conf_entry(Config *conf, char *key)
+{
+  long long int hash = ((long long int) key * 2) % conf->capacity;
+  return conf->buckets[hash];
+}
+
+Config *parse_config(ConfigTokens *tokens)
+{
+  for (size_t i = 0; i < tokens->size; i++) {
+    printf("%d, %s\n", tokens->items[i].type, tokens->items[i].value);
   }
   return NULL;
 }
 
 int verify_config()
 {
-  ConfigEntries *config = parse_config(lex_config());
+  Config *config = parse_config(lex_config());
   (void) config;
   return 0;
 }
@@ -239,7 +297,6 @@ int handle_verify_config()
   }
   return 1;
 }
-
 
 int handle_config_command(int argc, char **argv)
 {
