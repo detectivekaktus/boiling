@@ -270,7 +270,15 @@ int add_conf_entry(Config *conf, ConfigEntrySection section, char *key, char *va
 ConfigEntry *get_conf_entry(Config *conf, char *key)
 {
   long long int hash = ((long long int) key * 2) % conf->capacity;
-  return conf->buckets[hash];
+  if (ISSTREQ(conf->buckets[hash]->key, key))
+    return conf->buckets[hash];
+  else {
+    ConfigEntry *entry = conf->buckets[hash]->next;
+    while (!ISSTREQ(entry->key, key)) {
+      entry = entry->next;
+    }
+    return entry;
+  }
 }
 
 Config *parse_config(ConfigTokens *tokens)
