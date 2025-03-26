@@ -176,34 +176,34 @@ ConfigTokens *lex_config()
             ERRORF("Key name is too long. Max chars: %d", MAX_KEY_NAME_LEN);
             exit(1);
           }
-          char *value = malloc(MAX_KEY_NAME_LEN);
-          strncpy(value, config + start, i - start);
-          value[i - start] = '\0';
+          char *key_value = malloc(MAX_KEY_NAME_LEN);
+          strncpy(key_value, config + start, i - start);
+          key_value[i - start] = '\0';
           if (tokens->size >= tokens->capacity) {
             tokens->capacity *= 2;
             tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
           }
-          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_KEY, value);
-          global_type = CONFIG_KEY;
+          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_KEY, key_value);
           i++;
-        }
-        else {
-          global_type = CONFIG_VALUE;
-          int start = i;
+          if (config[i] == ' ') {
+            ERROR("There must be no space after `=` token.");
+            exit(1);
+          }
+          start = i;
           while (config[i] != '\n' && config[i] != '\0')
             i++;
           if (i - start > MAX_VALUE_LEN - 1) {
             ERRORF("Value is too long. Max chars: %d", MAX_VALUE_LEN);
             exit(1);
           }
-          char *value = malloc(MAX_VALUE_LEN);
-          strncpy(value, config + start, i - start);
-          value[i - start] = '\0';
+          char *val_value = malloc(MAX_VALUE_LEN);
+          strncpy(val_value, config + start, i - start);
+          val_value[i - start] = '\0';
           if (tokens->size >= tokens->capacity) {
             tokens->capacity *= 2;
             tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
           }
-          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_VALUE, value);
+          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_VALUE, val_value);
           global_type = CONFIG_VALUE;
           i++;
         }
@@ -284,7 +284,7 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
 Config *parse_config(ConfigTokens *tokens)
 {
   for (size_t i = 0; i < tokens->size; i++) {
-    printf("%d, %s\n", tokens->items[i].type, tokens->items[i].value);
+    printf("%d, `%s`\n", tokens->items[i].type, tokens->items[i].value);
   }
   return NULL;
 }
