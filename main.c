@@ -13,6 +13,16 @@
 
 #define MAX_CONFIG_PATH 512
 
+char *trim_trailing_space(char *str)
+{
+  int i = strlen(str) - 1;
+  while (str[i] == ' ') i--;
+  char *res = malloc(i + 2);
+  strncpy(res, str, i + 1);
+  res[i + 1] = '\0';
+  return res;
+}
+
 void help(const char *name)
 {
   printf("usage: %s <command> [<args>]\n\n", name);
@@ -199,11 +209,13 @@ ConfigTokens *lex_config()
           char *val_value = malloc(MAX_VALUE_LEN);
           strncpy(val_value, config + start, i - start);
           val_value[i - start] = '\0';
+          char *trimmed_val_value = trim_trailing_space(val_value);
+          free(val_value);
           if (tokens->size >= tokens->capacity) {
             tokens->capacity *= 2;
             tokens->items = realloc(tokens->items, sizeof(ConfigToken) * tokens->capacity);
           }
-          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_VALUE, val_value);
+          tokens->items[tokens->size++] = YIELD_TOKEN(CONFIG_VALUE, trimmed_val_value);
           global_type = CONFIG_VALUE;
           i++;
         }
