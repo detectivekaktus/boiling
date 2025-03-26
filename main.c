@@ -266,7 +266,10 @@ ConfigEntry *create_config_entry(ConfigEntrySection section, char *key, char *va
 
 int add_conf_entry(Config *conf, ConfigEntrySection section, char *key, char *value)
 {
-  long long int hash = ((long long int) key * 2) % conf->capacity;
+  int hash = 0;
+  for (size_t i = 0; i < strlen(key) + 1; i++)
+    hash += key[i];
+  hash %= conf->capacity;
   if (conf->buckets[hash] == NULL)
     conf->buckets[hash] = create_config_entry(section, key, value, NULL);
   else {
@@ -281,7 +284,10 @@ int add_conf_entry(Config *conf, ConfigEntrySection section, char *key, char *va
 
 ConfigEntry *get_conf_entry(Config *conf, char *key)
 {
-  long long int hash = ((long long int) key * 2) % conf->capacity;
+  int hash = 0;
+  for (size_t i = 0; i < strlen(key) + 1; i++)
+    hash += key[i];
+  hash %= conf->capacity;
   if (ISSTREQ(conf->buckets[hash]->key, key))
     return conf->buckets[hash];
   else {
