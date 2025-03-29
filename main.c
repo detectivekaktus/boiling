@@ -174,7 +174,7 @@ ConfigTokens *lex_config()
           while (config[i] != '=' && config[i] != ' ' && config[i] != '\n' && config[i] != '\0')
             i++;
           if (config[i] == '\n' || config[i] == '\0') {
-            ERRORF("%d: configuration key but no value\n", start);
+            ERROR("configuration key but no value");
             exit(1);
           }
           else if (config[i] == ' ') {
@@ -279,6 +279,16 @@ ConfigEntry *create_config_entry(char *key, char *value, void *next)
   return entry;
 }
 
+void destroy_config_entry(ConfigEntry *entry)
+{
+  free(entry->key);
+  free(entry->value);
+  ConfigEntry *next = entry->next;
+  while (next != NULL)
+    destroy_config_entry(next);
+  free(entry);
+}
+
 int add_conf_entry(Config *conf, char *key, char *value)
 {
   int hash = 0;
@@ -314,6 +324,17 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
     }
     return entry;
   }
+}
+
+void destroy_config(Config *conf)
+{
+  for (size_t i = 0; i < conf->capacity; i++) {
+    ConfigEntry *entry = conf->buckets[i];
+    if (entry == NULL) continue;
+    destroy_config_entry(entry);
+  }
+  free(conf->buckets);
+  free(conf);
 }
 
 bool is_known_key(char *key)
@@ -379,7 +400,7 @@ Configs *parse_config(ConfigTokens *tokens)
       case CONFIG_KEY: {
         char *key = token.value;
         if (!is_known_key(key)) {
-          ERRORF("`%s` doesn't appear to be a known key.", key);
+          ERRORF("`%s` doesn't appear to be a known key.\n", key);
           exit(1);
         }
         token = tokens->items[++i];
@@ -393,20 +414,19 @@ Configs *parse_config(ConfigTokens *tokens)
       } break;
     }
   }
+  free(tokens);
   return confs;
 }
 
 int verify_config()
 {
   Configs *confs = parse_config(lex_config());
-  for (size_t i = 0; i < confs->size; i++) {
-    for (size_t j = 0; j < confs->items[i]->capacity; j++) {
-      if (confs->items[i]->buckets[j] != NULL)
-        printf("%s : %s\n", confs->items[i]->buckets[j]->key, confs->items[i]->buckets[j]->value);
-    }
-    putchar('\n');
+  if (confs != NULL) {
+    for (size_t i = 0; i < confs->capacity; i++)
+      destroy_config(confs->items[i]);
+    return 0;
   }
-  return 0;
+  return 1;
 }
 
 int handle_verify_config()
