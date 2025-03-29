@@ -316,6 +316,14 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
   }
 }
 
+bool is_known_key(char *key)
+{
+  return ISSTREQ(key, "name") || ISSTREQ(key, "license") || 
+    ISSTREQ(key, "gitrepo") || ISSTREQ(key, "readme") ||
+    ISSTREQ(key, "build") || ISSTREQ(key, "src") ||
+    ISSTREQ(key, "bin") || ISSTREQ(key, "version");
+}
+
 Configs *parse_config(ConfigTokens *tokens)
 {
   // Arena?
@@ -346,6 +354,7 @@ Configs *parse_config(ConfigTokens *tokens)
             ERROR("The first config entry after `Language` section must be `name`");
             exit(1);
           }
+          free(token.value);
           token = tokens->items[++i];
           char *value = token.value;
           if (ISSTREQ(value, "clang"))
@@ -358,6 +367,7 @@ Configs *parse_config(ConfigTokens *tokens)
             ERRORF("Unknown language `%s`\n", value);
             exit(1);
           }
+          free(token.value);
         }
         else {
           ERRORF("Unknown section name `%s`\n", token.value);
@@ -368,6 +378,10 @@ Configs *parse_config(ConfigTokens *tokens)
 
       case CONFIG_KEY: {
         char *key = token.value;
+        if (!is_known_key(key)) {
+          ERRORF("`%s` doesn't appear to be a known key.", key);
+          exit(1);
+        }
         token = tokens->items[++i];
         char *value = token.value;
         add_conf_entry(confs->items[conf], key, value);
@@ -379,7 +393,6 @@ Configs *parse_config(ConfigTokens *tokens)
       } break;
     }
   }
-  (void) conf;
   return confs;
 }
 
