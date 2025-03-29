@@ -255,7 +255,7 @@ typedef struct {
 
 void add_config(Configs *confs, Config *conf)
 {
-  if (confs->size + 1 >= confs->capacity) {
+  if (confs->size >= confs->capacity) {
     ERROR("Maximum configs limit extended.");
     exit(1);
   }
@@ -325,6 +325,12 @@ Configs *parse_config(ConfigTokens *tokens)
   confs->items = malloc(sizeof(Config *) * confs->capacity);
   Config *global = create_config();
   add_config(confs, global);
+  Config *clang = create_config();
+  add_config(confs, clang);
+  Config *cpp = create_config();
+  add_config(confs, cpp);
+  Config *python = create_config();
+  add_config(confs, python);
   
   size_t i = 0;
   size_t conf = GLOBAL_CONFIG;
@@ -360,6 +366,14 @@ Configs *parse_config(ConfigTokens *tokens)
         i++;
       } break;
 
+      case CONFIG_KEY: {
+        char *key = token.value;
+        token = tokens->items[++i];
+        char *value = token.value;
+        add_conf_entry(confs->items[conf], key, value);
+        i++;
+      } break;
+
       default: {
         assert(0 && "unreachable");
       } break;
@@ -371,8 +385,14 @@ Configs *parse_config(ConfigTokens *tokens)
 
 int verify_config()
 {
-  Configs *configs = parse_config(lex_config());
-  (void) configs;
+  Configs *confs = parse_config(lex_config());
+  for (size_t i = 0; i < confs->size; i++) {
+    for (size_t j = 0; j < confs->items[i]->capacity; j++) {
+      if (confs->items[i]->buckets[j] != NULL)
+        printf("%s : %s\n", confs->items[i]->buckets[j]->key, confs->items[i]->buckets[j]->value);
+    }
+    putchar('\n');
+  }
   return 0;
 }
 
