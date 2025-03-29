@@ -292,6 +292,8 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
     return conf->buckets[hash];
   else {
     ConfigEntry *entry = conf->buckets[hash]->next;
+    if (entry == NULL)
+      return NULL;
     while (!ISSTREQ(entry->key, key)) {
       entry = entry->next;
     }
