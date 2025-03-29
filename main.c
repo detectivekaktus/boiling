@@ -227,13 +227,7 @@ ConfigTokens *lex_config()
   return tokens;
 }
 
-typedef enum {
-  GLOBAL,
-  LANGUAGE
-} ConfigEntrySection;
-
 typedef struct {
-  ConfigEntrySection section;
   char *key;
   char *value;
   void *next;
@@ -246,7 +240,29 @@ typedef struct {
 
 #define CONFIG_INIT_CAPACITY 256
 
-Config *create_conf()
+#define GLOBAL_CONFIG 0
+#define CLANG_CONFIG  1
+#define CPP_CONFIG    2
+#define PYTHON_CONFIG 3
+
+#define TOTAL_CONFIGS 4
+
+typedef struct {
+  Config **items;
+  size_t capacity;
+  size_t size;
+} Configs;
+
+void add_config(Configs *confs, Config *conf)
+{
+  if (confs->size + 1 >= confs->capacity) {
+    ERROR("Maximum configs limit extended.");
+    exit(1);
+  }
+  confs->items[confs->size++] = conf;
+}
+
+Config *create_config()
 {
   Config *conf = malloc(sizeof(Config));
   conf->capacity = CONFIG_INIT_CAPACITY;
@@ -254,30 +270,29 @@ Config *create_conf()
   return conf;
 }
 
-ConfigEntry *create_config_entry(ConfigEntrySection section, char *key, char *value, void *next)
+ConfigEntry *create_config_entry(char *key, char *value, void *next)
 {
   ConfigEntry *entry = malloc(sizeof(ConfigEntry));
-  entry->section = section;
   entry->key = key;
   entry->value = value;
   entry->next = next;
   return entry;
 }
 
-int add_conf_entry(Config *conf, ConfigEntrySection section, char *key, char *value)
+int add_conf_entry(Config *conf, char *key, char *value)
 {
   int hash = 0;
   for (size_t i = 0; i < strlen(key) + 1; i++)
     hash += key[i];
   hash %= conf->capacity;
   if (conf->buckets[hash] == NULL)
-    conf->buckets[hash] = create_config_entry(section, key, value, NULL);
+    conf->buckets[hash] = create_config_entry(key, value, NULL);
   else {
     ConfigEntry *entry = conf->buckets[hash];
     while (entry->next != NULL) {
       entry = entry->next;
     }
-    entry->next = create_config_entry(section, key, value, NULL);
+    entry->next = create_config_entry(key, value, NULL);
   }
   return 0;
 }
@@ -301,18 +316,63 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
   }
 }
 
-Config *parse_config(ConfigTokens *tokens)
+Configs *parse_config(ConfigTokens *tokens)
 {
-  for (size_t i = 0; i < tokens->size; i++) {
-    printf("%d, `%s`\n", tokens->items[i].type, tokens->items[i].value);
+  // Arena?
+  Configs *confs = malloc(sizeof(Configs));
+  confs->capacity = TOTAL_CONFIGS;
+  confs->size = 0;
+  confs->items = malloc(sizeof(Config *) * confs->capacity);
+  Config *global = create_config();
+  add_config(confs, global);
+  
+  size_t i = 0;
+  size_t conf = GLOBAL_CONFIG;
+  while (i < tokens->size) {
+    ConfigToken token = tokens->items[i];
+    switch (token.type) {
+      case CONFIG_SECTION: {
+        if (ISSTREQ(token.value, "Core"))
+          conf = GLOBAL_CONFIG;
+        else if (ISSTREQ(token.value, "Language")) {
+          token = tokens->items[++i];
+          if (!ISSTREQ(token.value, "name")) {
+            ERROR("The first config entry after `Language` section must be `name`");
+            exit(1);
+          }
+          token = tokens->items[++i];
+          char *value = token.value;
+          if (ISSTREQ(value, "clang"))
+            conf = CLANG_CONFIG;
+          else if (ISSTREQ(value, "cpp"))
+            conf = CPP_CONFIG;
+          else if (ISSTREQ(value, "py"))
+            conf = PYTHON_CONFIG;
+          else {
+            ERRORF("Unknown language `%s`\n", value);
+            exit(1);
+          }
+        }
+        else {
+          ERRORF("Unknown section name `%s`\n", token.value);
+          exit(1);
+        }
+        i++;
+      } break;
+
+      default: {
+        assert(0 && "unreachable");
+      } break;
+    }
   }
-  return NULL;
+  (void) conf;
+  return confs;
 }
 
 int verify_config()
 {
-  Config *config = parse_config(lex_config());
-  (void) config;
+  Configs *configs = parse_config(lex_config());
+  (void) configs;
   return 0;
 }
 
