@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <unistd.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 
 #define ERROR(msg) fprintf(stderr, "error: %s\n", msg)
@@ -44,10 +46,9 @@ char *find_config()
     return NULL;
   char *path = malloc(MAX_CONFIG_PATH);
   sprintf(path, "%s/.config/boiling/boiling.conf", home);
-  struct stat buf;
-  if (stat(path, &buf) != 0) {
+  if (access(path, F_OK) != 0) {
     free(path);
-    return NULL; 
+    return NULL;
   }
   return path;
 }
@@ -148,7 +149,7 @@ ConfigTokens *lex_config()
         }
 
         if (i - start > MAX_SECTION_NAME_LEN - 1) {
-          ERRORF("Section name is too long. Max chars: %d", MAX_SECTION_NAME_LEN);
+          ERRORF("Section name is too long. Max chars: %d\n", MAX_SECTION_NAME_LEN);
           exit(1);
         }
         char *value = malloc(MAX_SECTION_NAME_LEN);
@@ -183,7 +184,7 @@ ConfigTokens *lex_config()
           }
 
           if (i - start > MAX_KEY_NAME_LEN - 1) {
-            ERRORF("Key name is too long. Max chars: %d", MAX_KEY_NAME_LEN);
+            ERRORF("Key name is too long. Max chars: %d\n", MAX_KEY_NAME_LEN);
             exit(1);
           }
           char *key_value = malloc(MAX_KEY_NAME_LEN);
@@ -235,6 +236,7 @@ typedef struct {
 
 typedef struct {
   ConfigEntry **buckets;
+  size_t size;
   size_t capacity;
 } Config;
 
@@ -266,6 +268,7 @@ Config *create_config()
 {
   Config *conf = malloc(sizeof(Config));
   conf->capacity = CONFIG_INIT_CAPACITY;
+  conf->size = 0;
   conf->buckets = calloc(conf->capacity, sizeof(ConfigEntry *));
   return conf;
 }
@@ -304,6 +307,7 @@ int add_conf_entry(Config *conf, char *key, char *value)
     }
     entry->next = create_config_entry(key, value, NULL);
   }
+  conf->size++;
   return 0;
 }
 
@@ -313,6 +317,8 @@ ConfigEntry *get_conf_entry(Config *conf, char *key)
   for (size_t i = 0; i < strlen(key) + 1; i++)
     hash += key[i];
   hash %= conf->capacity;
+  if (conf->buckets[hash] == NULL)
+    return NULL;
   if (ISSTREQ(conf->buckets[hash]->key, key))
     return conf->buckets[hash];
   else {
@@ -418,15 +424,111 @@ Configs *parse_config(ConfigTokens *tokens)
   return confs;
 }
 
+bool is_bool(char *str)
+{
+  return ISSTREQ(str, "true") || ISSTREQ(str, "false");
+}
+
+bool file_exists(char *path)
+{
+  return access(path, F_OK) == 0;
+}
+
+bool is_dir(char *path)
+{
+  struct stat pstat;
+  stat(path, &pstat);
+  return S_ISDIR(pstat.st_mode);
+}
+
+bool is_valid_path(char *str)
+{
+  char *s = strchr(str, 0);
+  return (long long int) strlen(str) == s - str;
+}
+
+bool is_valid_core_config(Config *config)
+{
+  if (config->size == 0) {
+    ERROR("`Core` must have `name` key value pair.");
+    return false;
+  }
+
+  ConfigEntry *entry = get_conf_entry(config, "name");
+  if (entry == NULL) {
+    ERROR("no `name` specified for boiling.");
+    return false;
+  }
+
+  entry = get_conf_entry(config, "license");
+  if (entry != NULL) {
+    if (!file_exists(entry->value)) {
+      ERRORF("%s path does not exist. Omitting `license` key.\n", entry->value);
+      return false;
+    }
+    if (is_dir(entry->value)) {
+      ERRORF("%s path is directory, not a file. Omitting `license` key.\n", entry->value);
+      return false;
+    }
+  }
+
+  entry = get_conf_entry(config, "gitrepo");
+  if (entry != NULL && !is_bool(entry->value)) {
+    ERRORF("`gitrepo` expects boolean value. `%s` provided.\n", entry->value);
+    return false;
+  }
+  return true;
+}
+
+bool is_valid_cstd(char *std)
+{
+  return ISSTREQ(std, "c89") || ISSTREQ(std, "c99") ||
+    ISSTREQ(std, "c11") || ISSTREQ(std, "c17") ||
+    ISSTREQ(std, "c23");
+}
+
+bool is_valid_clang_config(Config *config)
+{
+  if (config->size == 0) return true;
+  ConfigEntry *entry = get_conf_entry(config, "bin");
+  if (entry != NULL && !is_valid_path(entry->value)) {
+    ERRORF("`%s` is not a valid path.\n", entry->value);
+    return false;
+  }
+  entry = get_conf_entry(config, "src");
+  if (entry != NULL && !is_valid_path(entry->value)) {
+    ERRORF("`%s` is not a valid path.\n", entry->value);
+    return false;
+  }
+  entry = get_conf_entry(config, "build");
+  if (entry != NULL) {
+    if (!file_exists(entry->value)) {
+      ERRORF("`%s` does not exist.\n", entry->value);
+      return false;
+    }
+    if (is_dir(entry->value)) {
+      ERRORF("`%s` is a directory. Expected a file.\n", entry->value);
+      return false;
+    }
+  }
+  entry = get_conf_entry(config, "version");
+  if (entry != NULL && !is_valid_cstd(entry->value)) {
+    ERRORF("`%s` is not a valid c standard.\n", entry->value);
+    return false;
+  }
+  return true;
+}
+
 int verify_config()
 {
   Configs *confs = parse_config(lex_config());
-  if (confs != NULL) {
-    for (size_t i = 0; i < confs->capacity; i++)
-      destroy_config(confs->items[i]);
-    return 0;
-  }
-  return 1;
+  if (confs == NULL)
+    return 1;
+
+  if (!is_valid_core_config(confs->items[GLOBAL_CONFIG])) return 1;
+  if (!is_valid_clang_config(confs->items[CLANG_CONFIG])) return 1;
+
+  return 0;
 }
 
 int handle_verify_config()
