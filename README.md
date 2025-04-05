@@ -3,24 +3,25 @@
 Boiling is a boilerplate project structure generator that easily bootstraps any project that uses a supported programming language. The full list of programming languages supported is written in this README file.
 
 ## Config
+You can copy the `config` directory inside the project root folder into your `.config` directory and then modify your config from there.
+
+Licenses must have `[[Year]]` and `[[Name]]` placeholders for the current year and your config name accordingly.
 ```conf
 [Core]
 name=John Smith
-license=./license/mit
+license=./license/MIT
 gitrepo=true
 
 [Language]
 name=c
 bin=./build
 src=./src
-build=./build/build.c.sh
 version=c99
 
 [Language]
 name=cpp
 bin=./build
 src=./src
-build=./build/build.cpp.sh
 version=c++11
 
 [Language]

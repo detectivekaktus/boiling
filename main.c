@@ -347,8 +347,8 @@ bool is_known_key(char *key)
 {
   return ISSTREQ(key, "name") || ISSTREQ(key, "license") || 
     ISSTREQ(key, "gitrepo") || ISSTREQ(key, "readme") ||
-    ISSTREQ(key, "build") || ISSTREQ(key, "src") ||
-    ISSTREQ(key, "bin") || ISSTREQ(key, "version");
+    ISSTREQ(key, "src") || ISSTREQ(key, "bin") ||
+    ISSTREQ(key, "version");
 }
 
 Configs *parse_config(ConfigTokens *tokens)
@@ -501,17 +501,6 @@ bool is_valid_clang_config(Config *config)
     ERRORF("`%s` is not a valid path.\n", entry->value);
     return false;
   }
-  entry = get_conf_entry(config, "build");
-  if (entry != NULL) {
-    if (!file_exists(entry->value)) {
-      ERRORF("`%s` does not exist.\n", entry->value);
-      return false;
-    }
-    if (is_dir(entry->value)) {
-      ERRORF("`%s` is a directory. Expected a file.\n", entry->value);
-      return false;
-    }
-  }
   entry = get_conf_entry(config, "version");
   if (entry != NULL && !is_valid_cstd(entry->value)) {
     ERRORF("`%s` is not a valid c standard.\n", entry->value);
@@ -541,17 +530,6 @@ bool is_valid_cpp_config(Config *config)
   if (entry != NULL && !is_valid_path(entry->value)) {
     ERRORF("`%s` is not a valid path.\n", entry->value);
     return false;
-  }
-  entry = get_conf_entry(config, "build");
-  if (entry != NULL) {
-    if (!file_exists(entry->value)) {
-      ERRORF("`%s` does not exist.\n", entry->value);
-      return false;
-    }
-    if (is_dir(entry->value)) {
-      ERRORF("`%s` is a directory. Expected a file.\n", entry->value);
-      return false;
-    }
   }
   entry = get_conf_entry(config, "version");
   if (entry != NULL && !is_valid_cppstd(entry->value)) {
