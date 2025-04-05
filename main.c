@@ -489,7 +489,8 @@ bool is_valid_cstd(char *std)
 
 bool is_valid_clang_config(Config *config)
 {
-  if (config->size == 0) return true;
+  if (config->size == 0)
+    return true;
   ConfigEntry *entry = get_conf_entry(config, "bin");
   if (entry != NULL && !is_valid_path(entry->value)) {
     ERRORF("`%s` is not a valid path.\n", entry->value);
@@ -519,6 +520,47 @@ bool is_valid_clang_config(Config *config)
   return true;
 }
 
+bool is_valid_cppstd(char *str)
+{
+  return ISSTREQ(str, "c++03") || ISSTREQ(str, "c++11") ||
+    ISSTREQ(str, "c++14") || ISSTREQ(str, "c++17") ||
+    ISSTREQ(str, "c++20") || ISSTREQ(str, "c++23");
+}
+
+bool is_valid_cpp_config(Config *config)
+{
+  if (config == NULL)
+    return true;
+  
+  ConfigEntry *entry = get_conf_entry(config, "bin");
+  if (entry != NULL && !is_valid_path(entry->value)) {
+    ERRORF("`%s` is not a valid path.\n", entry->value);
+    return false;
+  }
+  entry = get_conf_entry(config, "src");
+  if (entry != NULL && !is_valid_path(entry->value)) {
+    ERRORF("`%s` is not a valid path.\n", entry->value);
+    return false;
+  }
+  entry = get_conf_entry(config, "build");
+  if (entry != NULL) {
+    if (!file_exists(entry->value)) {
+      ERRORF("`%s` does not exist.\n", entry->value);
+      return false;
+    }
+    if (is_dir(entry->value)) {
+      ERRORF("`%s` is a directory. Expected a file.\n", entry->value);
+      return false;
+    }
+  }
+  entry = get_conf_entry(config, "version");
+  if (entry != NULL && !is_valid_cppstd(entry->value)) {
+    ERRORF("`%s` is not a valid c++ standard.\n", entry->value);
+    return false;
+  }
+  return true;
+}
+
 int verify_config()
 {
   Configs *confs = parse_config(lex_config());
@@ -527,6 +569,7 @@ int verify_config()
 
   if (!is_valid_core_config(confs->items[GLOBAL_CONFIG])) return 1;
   if (!is_valid_clang_config(confs->items[CLANG_CONFIG])) return 1;
+  if (!is_valid_cpp_config(confs->items[CPP_CONFIG])) return 1;
 
   return 0;
 }
