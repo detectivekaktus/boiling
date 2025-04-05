@@ -32,7 +32,6 @@ void help(const char *name)
   printf("new: creates a new project in current directory\n");
   printf("  --name:          specify the name of the application\n");
   printf("  --lang | -l:     set the programming language\n");
-  printf("  --license:       indicate the license of the project\n");
   printf("config: verify the configuration of the application\n");
   printf("  --verify | -v:   verify the syntactic and lexical correctness of the configuration file\n");
   printf("  --where  | -w:   prints the config file path\n");
@@ -626,10 +625,9 @@ int handle_config_command(int argc, char **argv)
   return 0;
 }
 
-int create_new_project(char *name, char *license, char *lang)
+int create_new_project(char *name, char *lang)
 {
   (void) name;
-  (void) license;
   (void) lang;
   return 0;
 }
@@ -641,11 +639,9 @@ int create_new_project(char *name, char *license, char *lang)
 int handle_new_command(int argc, char **argv)
 {
   bool named = false;
-  bool licensed = false;
   bool languaged = false;
 
   char name[MAX_PROJECT_NAME_LEN];
-  char license[MAX_LICENSE_NAME_LEN];
   char lang[MAX_LANG_NAME_LEN];
 
   for (int i = 2; i < argc; i++) {
@@ -668,18 +664,6 @@ int handle_new_command(int argc, char **argv)
         return 1;
       strncpy(name, arg, MAX_PROJECT_NAME_LEN);
       named = true;
-    }
-    else if (ISSTREQ(arg, "license")) {
-      if (licensed) continue;
-      if (i + 1 >= argc) {
-        ERROR("No value specified for `license` flag.");
-        return 1;
-      }
-      arg = argv[++i];
-      if (strlen(arg) + 1 > MAX_LICENSE_NAME_LEN)
-        return 1;
-      strncpy(license, arg, MAX_LICENSE_NAME_LEN);
-      licensed = true;
     }
     else if (ISSTREQ(arg, "lang") || ISSTREQ(arg, "l")) {
       if (languaged) continue;
