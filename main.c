@@ -561,6 +561,36 @@ bool is_valid_cpp_config(Config *config)
   return true;
 }
 
+// This one is tough to implement. You need to have
+// all the python version inside a hashmap and try
+// getting the `str` argument from that hashmap
+// to verify if the version is correct one.
+//
+// I ommit it.
+bool is_valid_pystd(char *str)
+{
+  if (str[0] != '3' && str[0] != '2')
+    return false;
+  return true;
+}
+
+bool is_valid_py_config(Config *config)
+{
+  if (config == NULL)
+    return true;
+  ConfigEntry *entry = get_conf_entry(config, "src");
+  if (entry != NULL && !is_valid_path(entry->value)) {
+    ERRORF("`%s` is not a valid path.\n", entry->value);
+    return false;
+  }
+  entry = get_conf_entry(config, "version");
+  if (entry != NULL && !is_valid_pystd(entry->value)) {
+    ERRORF("`%s` is not a valid python standard.\n", entry->value);
+    return false;
+  }
+  return true;
+}
+
 int verify_config()
 {
   Configs *confs = parse_config(lex_config());
@@ -570,6 +600,7 @@ int verify_config()
   if (!is_valid_core_config(confs->items[GLOBAL_CONFIG])) return 1;
   if (!is_valid_clang_config(confs->items[CLANG_CONFIG])) return 1;
   if (!is_valid_cpp_config(confs->items[CPP_CONFIG])) return 1;
+  if (!is_valid_py_config(confs->items[PYTHON_CONFIG])) return 1;
 
   return 0;
 }
