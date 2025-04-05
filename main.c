@@ -17,6 +17,7 @@
 
 char *trim_trailing_space(char *str)
 {
+  if (strlen(str) == 0) return str;
   int i = strlen(str) - 1;
   while (str[i] == ' ') i--;
   char *res = malloc(i + 2);
@@ -682,7 +683,7 @@ int handle_new_command(int argc, char **argv)
       return 1;
     }
   }
-  return create_new_project(name, license, lang);
+  return create_new_project(name, lang);
 }
 
 int main(int argc, char **argv)
