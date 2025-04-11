@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -7,6 +9,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #define ERROR(msg) fprintf(stderr, "error: %s\n", msg)
 #define ERRORF(msg, ...) fprintf(stderr, "error: "); fprintf(stderr, msg, ##__VA_ARGS__)
@@ -31,7 +34,6 @@ void help(const char *name)
   printf("usage: %s <command> [<args>]\n\n", name);
   printf("The most common Boiling commands used:\n\n");
   printf("new: creates a new project in current directory\n");
-  printf("  --name:          specify the name of the application\n");
   printf("  --lang | -l:     set the programming language\n");
   printf("config: verify the configuration of the application\n");
   printf("  --verify | -v:   verify the syntactic and lexical correctness of the configuration file\n");
@@ -568,9 +570,14 @@ bool is_valid_py_config(Config *config)
   return true;
 }
 
+Configs *get_configs()
+{
+  return parse_config(lex_config());
+}
+
 int verify_config()
 {
-  Configs *confs = parse_config(lex_config());
+  Configs *confs = get_configs();
   if (confs == NULL)
     return 1;
 
@@ -626,11 +633,48 @@ int handle_config_command(int argc, char **argv)
   return 0;
 }
 
-int create_new_project(char *name, char *lang)
+#define MAX_CWD_SIZE 2048
+
+int get_lang_index(char *lang)
 {
-  (void) name;
-  (void) lang;
+  if (ISSTREQ(lang, "c") || ISSTREQ(lang, "clang"))
+    return CLANG_CONFIG;
+  if (ISSTREQ(lang, "c++") || ISSTREQ(lang, "cpp"))
+    return CPP_CONFIG;
+  if (ISSTREQ(lang, "py"))
+    return PYTHON_CONFIG;
+  return -1;
+}
+
+int create_new_project(char *lang)
+{
+  int lindex = get_lang_index(lang);
+  if (lindex == -1) {
+    ERRORF("`%s` is not a supported language.\n", lang);
+    return 1;
+  }
+
+  char cwd[MAX_CWD_SIZE];
+  getcwd(cwd, MAX_CWD_SIZE);
+  Configs *confs = get_configs();
+
+  ConfigEntry *entry = get_conf_entry(confs->items[GLOBAL_CONFIG], "gitrepo");
+  if (entry != NULL && ISSTREQ(entry->value, "true")) {
+    pid_t pid = fork();
+    if (pid == 0) {
+      char *argv[] = { "/usr/bin/git", "init", NULL };
+      execve("/usr/bin/git", argv, NULL);
+      goto error;
+    }
+    else {
+      siginfo_t info;
+      waitid(P_ALL, 0, &info, WEXITED);
+    }
+  }
+
   return 0;
+error:
+  return 1;
 }
 
 #define MAX_PROJECT_NAME_LEN 128
@@ -669,7 +713,7 @@ int handle_new_command(int argc, char **argv)
     else if (ISSTREQ(arg, "lang") || ISSTREQ(arg, "l")) {
       if (languaged) continue;
       if (i + 1 >= argc) {
-        ERROR("No value specified for `license` flag.");
+        ERROR("No value specified for `lang` flag.");
         return 1;
       }
       arg = argv[++i];
@@ -683,7 +727,7 @@ int handle_new_command(int argc, char **argv)
       return 1;
     }
   }
-  return create_new_project(name, lang);
+  return create_new_project(lang);
 }
 
 int main(int argc, char **argv)
