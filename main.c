@@ -646,6 +646,21 @@ int get_lang_index(char *lang)
   return -1;
 }
 
+char *concat_path_file(char *path, char *file)
+{
+  char *str = malloc(MAX_CWD_SIZE + MAX_VALUE_LEN);
+  size_t pathlen = strlen(path);
+  strncpy(str, path, pathlen);
+  str[pathlen] = '/';
+
+  if (file[0] == '.' || file[0] == '/') {
+    file++;
+  }
+  strncpy(str + pathlen, file, strlen(file));
+
+  return str;
+}
+
 int create_new_project(char *lang)
 {
   int lindex = get_lang_index(lang);
@@ -673,13 +688,20 @@ int create_new_project(char *lang)
     }
   }
 
+  Config *conf = confs->items[lindex];
+  entry = get_conf_entry(conf, "src");
+  if (entry != NULL) {
+    char *path = concat_path_file(cwd, entry->value);
+    mkdir(path, 0777);
+    free(path);
+  }
+
   return 0;
 error:
   return 1;
 }
 
 #define MAX_PROJECT_NAME_LEN 128
-#define MAX_LICENSE_NAME_LEN 64
 #define MAX_LANG_NAME_LEN    64
 
 int handle_new_command(int argc, char **argv)
