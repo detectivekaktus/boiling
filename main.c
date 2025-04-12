@@ -657,13 +657,14 @@ int create_new_project(char *lang)
   char cwd[MAX_CWD_SIZE];
   getcwd(cwd, MAX_CWD_SIZE);
   Configs *confs = get_configs();
+  extern char **environ;
 
   ConfigEntry *entry = get_conf_entry(confs->items[GLOBAL_CONFIG], "gitrepo");
   if (entry != NULL && ISSTREQ(entry->value, "true")) {
     pid_t pid = fork();
     if (pid == 0) {
       char *argv[] = { "/usr/bin/git", "init", NULL };
-      execve("/usr/bin/git", argv, NULL);
+      execve("/usr/bin/git", argv, environ);
       goto error;
     }
     else {
@@ -744,8 +745,13 @@ int main(int argc, char **argv)
     help(argv[0]);
     return 1;
   }
-  if (ISSTREQ(command, "new"))
-    return handle_new_command(argc, argv);
+  if (ISSTREQ(command, "new")) {
+    if (handle_new_command(argc, argv) != 0) {
+      ERROR("Something went wrong\n");
+      return 1;
+    }
+    return 0;
+  }
   if (ISSTREQ(command, "config"))
     return handle_config_command(argc, argv);
   else {
