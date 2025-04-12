@@ -347,9 +347,8 @@ void destroy_config(Config *conf)
 bool is_known_key(char *key)
 {
   return ISSTREQ(key, "name") || ISSTREQ(key, "license") || 
-    ISSTREQ(key, "gitrepo") || ISSTREQ(key, "readme") ||
-    ISSTREQ(key, "src") || ISSTREQ(key, "bin") ||
-    ISSTREQ(key, "version");
+    ISSTREQ(key, "gitrepo") || ISSTREQ(key, "src") ||
+    ISSTREQ(key, "bin");
 }
 
 Configs *parse_config(ConfigTokens *tokens)
@@ -481,13 +480,6 @@ bool is_valid_core_config(Config *config)
   return true;
 }
 
-bool is_valid_cstd(char *std)
-{
-  return ISSTREQ(std, "c89") || ISSTREQ(std, "c99") ||
-    ISSTREQ(std, "c11") || ISSTREQ(std, "c17") ||
-    ISSTREQ(std, "c23");
-}
-
 bool is_valid_clang_config(Config *config)
 {
   if (config->size == 0)
@@ -502,19 +494,7 @@ bool is_valid_clang_config(Config *config)
     ERRORF("`%s` is not a valid path.\n", entry->value);
     return false;
   }
-  entry = get_conf_entry(config, "version");
-  if (entry != NULL && !is_valid_cstd(entry->value)) {
-    ERRORF("`%s` is not a valid c standard.\n", entry->value);
-    return false;
-  }
   return true;
-}
-
-bool is_valid_cppstd(char *str)
-{
-  return ISSTREQ(str, "c++03") || ISSTREQ(str, "c++11") ||
-    ISSTREQ(str, "c++14") || ISSTREQ(str, "c++17") ||
-    ISSTREQ(str, "c++20") || ISSTREQ(str, "c++23");
 }
 
 bool is_valid_cpp_config(Config *config)
@@ -530,11 +510,6 @@ bool is_valid_cpp_config(Config *config)
   entry = get_conf_entry(config, "src");
   if (entry != NULL && !is_valid_path(entry->value)) {
     ERRORF("`%s` is not a valid path.\n", entry->value);
-    return false;
-  }
-  entry = get_conf_entry(config, "version");
-  if (entry != NULL && !is_valid_cppstd(entry->value)) {
-    ERRORF("`%s` is not a valid c++ standard.\n", entry->value);
     return false;
   }
   return true;
@@ -560,11 +535,6 @@ bool is_valid_py_config(Config *config)
   ConfigEntry *entry = get_conf_entry(config, "src");
   if (entry != NULL && !is_valid_path(entry->value)) {
     ERRORF("`%s` is not a valid path.\n", entry->value);
-    return false;
-  }
-  entry = get_conf_entry(config, "version");
-  if (entry != NULL && !is_valid_pystd(entry->value)) {
-    ERRORF("`%s` is not a valid python standard.\n", entry->value);
     return false;
   }
   return true;
@@ -690,6 +660,13 @@ int create_new_project(char *lang)
 
   Config *conf = confs->items[lindex];
   entry = get_conf_entry(conf, "src");
+  if (entry != NULL) {
+    char *path = concat_path_file(cwd, entry->value);
+    mkdir(path, 0777);
+    free(path);
+  }
+
+  entry = get_conf_entry(conf, "bin");
   if (entry != NULL) {
     char *path = concat_path_file(cwd, entry->value);
     mkdir(path, 0777);

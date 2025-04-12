@@ -16,18 +16,15 @@ gitrepo=true
 name=c
 bin=./build
 src=./src
-version=c99
 
 [Language]
 name=cpp
 bin=./build
 src=./src
-version=c++11
 
 [Language]
 name=py
 src=./src
-version=3.12
 ```
 
 ## Contributing
