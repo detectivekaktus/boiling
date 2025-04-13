@@ -633,6 +633,7 @@ char *concat_path_file(char *path, char *file)
 
 int create_new_project(char *lang)
 {
+  int retval = 0;
   int lindex = get_lang_index(lang);
   if (lindex == -1) {
     ERRORF("`%s` is not a supported language.\n", lang);
@@ -644,13 +645,15 @@ int create_new_project(char *lang)
   Configs *confs = get_configs();
   extern char **environ;
 
-  ConfigEntry *entry = get_conf_entry(confs->items[GLOBAL_CONFIG], "gitrepo");
+  Config *conf = confs->items[GLOBAL_CONFIG];
+  ConfigEntry *entry = get_conf_entry(conf, "gitrepo");
   if (entry != NULL && ISSTREQ(entry->value, "true")) {
     pid_t pid = fork();
     if (pid == 0) {
       char *argv[] = { "/usr/bin/git", "init", NULL };
       execve("/usr/bin/git", argv, environ);
-      goto error;
+      retval = 1;
+      goto cleanup;
     }
     else {
       siginfo_t info;
@@ -658,24 +661,35 @@ int create_new_project(char *lang)
     }
   }
 
-  Config *conf = confs->items[lindex];
+  conf = confs->items[lindex];
   entry = get_conf_entry(conf, "src");
   if (entry != NULL) {
     char *path = concat_path_file(cwd, entry->value);
-    mkdir(path, 0777);
+    int res = mkdir(path, 0777);
     free(path);
+    if (res != 0) {
+      retval = 1;
+      goto cleanup;
+    }
   }
 
   entry = get_conf_entry(conf, "bin");
   if (entry != NULL) {
     char *path = concat_path_file(cwd, entry->value);
-    mkdir(path, 0777);
+    int res = mkdir(path, 0777);
     free(path);
+    if (res != 0) {
+      retval = 1;
+      goto cleanup;
+    }
   }
 
-  return 0;
-error:
-  return 1;
+cleanup:
+  for (size_t i = 0; i < confs->capacity; i++)
+    destroy_config(confs->items[i]);
+  free(confs->items);
+  free(confs);
+  return retval;
 }
 
 #define MAX_PROJECT_NAME_LEN 128
