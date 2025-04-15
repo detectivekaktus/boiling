@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -621,12 +622,13 @@ char *concat_path_file(char *path, char *file)
   char *str = malloc(MAX_CWD_SIZE + MAX_VALUE_LEN);
   size_t pathlen = strlen(path);
   strncpy(str, path, pathlen);
-  str[pathlen] = '/';
+  str[pathlen++] = '/';
 
-  if (file[0] == '.' || file[0] == '/') {
+  if (file[0] == '/')
     file++;
-  }
-  strncpy(str + pathlen, file, strlen(file));
+  else if (file[0] == '.' && file[1] == '/')
+    file += 2;
+  strncpy(str + pathlen, file, strlen(file) + 1);
 
   return str;
 }
@@ -640,6 +642,11 @@ int create_new_project(char *lang)
     return 1;
   }
 
+  bool repoed = false;
+  bool copiedlicense = false;
+  bool createdsrcdir = false;
+  bool createdbindir = false;
+
   char cwd[MAX_CWD_SIZE];
   getcwd(cwd, MAX_CWD_SIZE);
   Configs *confs = get_configs();
@@ -651,7 +658,7 @@ int create_new_project(char *lang)
     pid_t pid = fork();
     if (pid == 0) {
       char *argv[] = { "/usr/bin/git", "init", NULL };
-      execve("/usr/bin/git", argv, environ);
+      execve(argv[0], argv, environ);
       retval = 1;
       goto cleanup;
     }
@@ -668,8 +675,14 @@ int create_new_project(char *lang)
     int res = mkdir(path, 0777);
     free(path);
     if (res != 0) {
-      retval = 1;
-      goto cleanup;
+      if (errno == EEXIST) {
+        fprintf(stderr, "warning: %s directory already exists.\n", entry->value);
+      }
+      else {
+        ERRORF("could not create %s directory: %s\n", entry->value, strerror(errno));
+        retval = 1;
+        goto cleanup;
+      }
     }
   }
 
@@ -679,12 +692,42 @@ int create_new_project(char *lang)
     int res = mkdir(path, 0777);
     free(path);
     if (res != 0) {
-      retval = 1;
-      goto cleanup;
+      if (errno == EEXIST) {
+        fprintf(stderr, "warning: %s directory already exists.\n", entry->value);
+      }
+      else {
+        ERRORF("could not create %s directory: %s\n", entry->value, strerror(errno));
+        retval = 1;
+        goto cleanup;
+      }
     }
   }
+  goto finish;
 
 cleanup:
+  if (repoed) {
+    char *path = concat_path_file(cwd, ".git");
+    remove(path);
+    free(path);
+  }
+  if (copiedlicense) {
+    char *path = concat_path_file(cwd, "LICENSE");
+    remove(path);
+    free(path);
+  }
+  if (createdsrcdir) {
+    entry = get_conf_entry(conf, "src");
+    char *path = concat_path_file(cwd, entry->value);
+    remove(path);
+    free(path);
+  }
+  if (createdbindir) {
+    entry = get_conf_entry(conf, "bin");
+    char *path = concat_path_file(cwd, entry->value);
+    remove(path);
+    free(path);
+  }
+finish:
   for (size_t i = 0; i < confs->capacity; i++)
     destroy_config(confs->items[i]);
   free(confs->items);
