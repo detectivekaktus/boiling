@@ -655,17 +655,24 @@ int create_new_project(char *lang)
   Config *conf = confs->items[GLOBAL_CONFIG];
   ConfigEntry *entry = get_conf_entry(conf, "gitrepo");
   if (entry != NULL && ISSTREQ(entry->value, "true")) {
-    pid_t pid = fork();
-    if (pid == 0) {
-      char *argv[] = { "/usr/bin/git", "init", NULL };
-      execve(argv[0], argv, environ);
-      retval = 1;
-      goto cleanup;
-    }
+    char *path = concat_path_file(cwd, ".git");
+    if (is_dir(path))
+      fprintf(stderr, "warning: git repository already initialized.\n");
     else {
-      siginfo_t info;
-      waitid(P_ALL, 0, &info, WEXITED);
+      pid_t pid = fork();
+      if (pid == 0) {
+        char *argv[] = { "/usr/bin/git", "init", NULL };
+        execve(argv[0], argv, environ);
+        retval = 1;
+        goto cleanup;
+      }
+      else {
+        siginfo_t info;
+        waitid(P_ALL, 0, &info, WEXITED);
+      }
+      repoed = true;
     }
+    free(path);
   }
 
   conf = confs->items[lindex];
@@ -684,6 +691,7 @@ int create_new_project(char *lang)
         goto cleanup;
       }
     }
+    else createdsrcdir = true;
   }
 
   entry = get_conf_entry(conf, "bin");
@@ -701,6 +709,7 @@ int create_new_project(char *lang)
         goto cleanup;
       }
     }
+    else createdbindir = true;
   }
   goto finish;
 
