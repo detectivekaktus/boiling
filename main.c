@@ -347,9 +347,8 @@ void destroy_config(Config *conf)
 
 bool is_known_key(char *key)
 {
-  return ISSTREQ(key, "name") || ISSTREQ(key, "license") || 
-    ISSTREQ(key, "gitrepo") || ISSTREQ(key, "src") ||
-    ISSTREQ(key, "bin");
+  return ISSTREQ(key, "name") || ISSTREQ(key, "gitrepo") ||
+    ISSTREQ(key, "src") || ISSTREQ(key, "bin");
 }
 
 Configs *parse_config(ConfigTokens *tokens)
@@ -459,18 +458,6 @@ bool is_valid_core_config(Config *config)
   if (entry == NULL) {
     ERROR("no `name` specified for boiling.");
     return false;
-  }
-
-  entry = get_conf_entry(config, "license");
-  if (entry != NULL) {
-    if (!file_exists(entry->value)) {
-      ERRORF("%s path does not exist. Omitting `license` key.\n", entry->value);
-      return false;
-    }
-    if (is_dir(entry->value)) {
-      ERRORF("%s path is directory, not a file. Omitting `license` key.\n", entry->value);
-      return false;
-    }
   }
 
   entry = get_conf_entry(config, "gitrepo");
@@ -633,6 +620,68 @@ char *concat_path_file(char *path, char *file)
   return str;
 }
 
+int copy_and_replace_placeholders(char *src, char *dst, char *name)
+{
+  FILE *f = fopen(src, "r");
+  if (f == NULL)
+    return 1;
+  fseek(f, 0, SEEK_END);
+  int bytes = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  
+  char *content = malloc(bytes + 1);
+  char c;
+  int i = 0;
+  while ((c = getc(f)) != EOF)
+    content[i++] = c;
+  content[i] = '\0';
+
+  fclose(f);
+
+  f = fopen(dst, "w");
+  for (int i = 0; i < bytes + 1; i++) {
+    if (content[i] == '[') {
+      assert(i + 1 < bytes + 1);
+      if (content[++i] == '[') {
+        int start = i + 1;
+        while (content[i] != '\0' && content[i] != '\n' && content[i] != ']')
+          i++;
+        if (content[i] == '\0' || content[i] == '\n') {
+          ERROR("Incorrect placeholder formatting for the license: reached end of the line or end of file.");
+          return 1;
+        }
+        assert(i + 1 < bytes + 1);
+        if (content[++i] != ']') {
+          ERROR("Incorrect placeholder formatting for the license: placeholder closed with one ']', expected two.");
+          return 1;
+        }
+        char placeholder[64];
+        size_t n = i - start - 1;
+        strncpy(placeholder, content + start, n);
+        placeholder[n] = '\0';
+        if (ISSTREQ(placeholder, "Name"))
+          fprintf(f, "%s", name);
+        else if (ISSTREQ(placeholder, "Year")) {
+          assert(0 && "not implemented");
+        }
+        else {
+          ERRORF("Unknown placeholder `%s`\n", placeholder);
+          return 1;
+        }
+        i++;
+      }
+      else {
+        fputc('[', f);
+        fputc(content[i], f);
+      }
+    }
+    else fputc(content[i], f);
+  }
+  fclose(f);
+
+  return 0;
+}
+
 int create_new_project(char *lang)
 {
   int retval = 0;
@@ -653,7 +702,32 @@ int create_new_project(char *lang)
   extern char **environ;
 
   Config *conf = confs->items[GLOBAL_CONFIG];
-  ConfigEntry *entry = get_conf_entry(conf, "gitrepo");
+  ConfigEntry *entry = get_conf_entry(conf, "name");
+  char *name = NULL;
+  if (entry != NULL)
+    name = entry->value;
+
+  char *confpath = find_config();
+  confpath[strlen(confpath) - 13] = '\0';
+  if (confpath != NULL) {
+    char *src = concat_path_file(confpath, "LICENSE");
+    char *dst = concat_path_file(cwd, "LICENSE");
+    int res = copy_and_replace_placeholders(src, dst, name);
+    if (res != 0) {
+      remove(dst);
+      free(src);
+      free(dst);
+      free(confpath);
+      retval = 1;
+      goto cleanup;
+    }
+    free(src);
+    free(dst);
+    free(confpath);
+    copiedlicense = true;
+  }
+
+  entry = get_conf_entry(conf, "gitrepo");
   if (entry != NULL && ISSTREQ(entry->value, "true")) {
     char *path = concat_path_file(cwd, ".git");
     if (is_dir(path))
