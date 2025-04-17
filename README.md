@@ -9,7 +9,6 @@ Licenses must have `[[Year]]` and `[[Name]]` placeholders for the current year a
 ```conf
 [Core]
 name=John Smith
-license=./license/MIT
 gitrepo=true
 
 [Language]
