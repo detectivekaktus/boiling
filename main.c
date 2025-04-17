@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -662,13 +663,14 @@ int copy_and_replace_placeholders(char *src, char *dst, char *name)
         if (ISSTREQ(placeholder, "Name"))
           fprintf(f, "%s", name);
         else if (ISSTREQ(placeholder, "Year")) {
-          assert(0 && "not implemented");
+          time_t now = time(NULL);
+          struct tm *curtime = localtime(&now);
+          fprintf(f, "%d", curtime->tm_year + 1900);
         }
         else {
           ERRORF("Unknown placeholder `%s`\n", placeholder);
           return 1;
         }
-        i++;
       }
       else {
         fputc('[', f);
